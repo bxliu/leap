@@ -606,6 +606,11 @@ namespace eosio {
       void set_connection_type( const string& peer_addr );
       bool is_transactions_only_connection()const { return connection_type == transactions_only; }
       bool is_blocks_only_connection()const { return connection_type == blocks_only; }
+      bool is_peers_only_connection()const { return connection_type == peers_only; }
+      bool is_no_blk_connection() const { return is_transactions_only_connection() || is_peers_only_connection(); }
+      bool is_no_trx_connection() const { return is_blocks_only_connection() || is_peers_only_connection(); }
+      bool is_no_peer_connection()const { return connection_type == blocks_only || connection_type == transactions_only || connection_type == both; }
+      bool is_all_type_connection()const { return connection_type == all; }
       void set_heartbeat_timeout(std::chrono::milliseconds msec) {
          std::chrono::system_clock::duration dur = msec;
          hb_timeout = dur.count();
@@ -624,7 +629,9 @@ namespace eosio {
       enum connection_types : char {
          both,
          transactions_only,
-         blocks_only
+         blocks_only,
+         peers_only,    // for peer discovery, using 'peer' flag
+         all            // keep 'both' as default, add 'all' flag for trx & blk & peer
       };
 
       std::atomic<connection_types>             connection_type{both};
@@ -953,7 +960,7 @@ namespace eosio {
 
    // called from connection strand
    void connection::set_connection_type( const string& peer_add ) {
-      // host:port:[<trx>|<blk>]
+      // host:port:[<trx>|<blk>|<peer>|<all>]
       string::size_type colon = peer_add.find(':');
       string::size_type colon2 = peer_add.find(':', colon + 1);
       string::size_type end = colon2 == string::npos
@@ -970,8 +977,17 @@ namespace eosio {
          fc_dlog( logger, "Setting connection ${c} type for: ${peer} to transactions only", ("c", connection_id)("peer", peer_add) );
          connection_type = transactions_only;
       } else if( type == "blk" ) {
-         fc_dlog( logger, "Setting connection ${c} type for: ${peer} to blocks only", ("c", connection_id)("peer", peer_add) );
-         connection_type = blocks_only;
+          fc_dlog(logger, "Setting connection ${c} type for: ${peer} to blocks only",
+                  ("c", connection_id)("peer", peer_add));
+          connection_type = blocks_only;
+      } else if( type == "peer" ) {
+          fc_dlog(logger, "Setting connection ${c} type for: ${peer} to peers only",
+                  ("c", connection_id)("peer", peer_add));
+          connection_type = peers_only;
+      } else if( type == "all" ) {
+          fc_dlog(logger, "Setting connection ${c} type for: ${peer} to peers and blocks and transactions",
+                  ("c", connection_id)("peer", peer_add));
+          connection_type = all;
       } else {
          fc_wlog( logger, "Unknown connection ${c} type: ${t}, for ${peer}", ("c", connection_id)("t", type)("peer", peer_add) );
       }
@@ -2298,7 +2314,7 @@ namespace eosio {
 
       string::size_type colon = peer_address().find(':');
       if (colon == std::string::npos || colon == 0) {
-         fc_elog( logger, "Invalid peer address. must be \"host:port[:<blk>|<trx>]\": ${p}", ("p", peer_address()) );
+         fc_elog( logger, "Invalid peer address. must be \"host:port[:<blk>|<trx>|<peer>|<all>]\": ${p}", ("p", peer_address()) );
          return false;
       }
 
@@ -3610,6 +3626,8 @@ namespace eosio {
       hello.p2p_address = my_impl->p2p_address;
       if( is_transactions_only_connection() ) hello.p2p_address += ":trx";
       if( is_blocks_only_connection() ) hello.p2p_address += ":blk";
+      if( is_peers_only_connection() ) hello.p2p_address += ":peer";
+      if( is_all_type_connection() ) hello.p2p_address += ":all";
       hello.p2p_address += " - " + hello.node_id.str().substr(0,7);
 #if defined( __APPLE__ )
       hello.os = "osx";
@@ -3640,12 +3658,15 @@ namespace eosio {
          ( "p2p-server-address", bpo::value<string>(), "An externally accessible host:port for identifying this node. Defaults to p2p-listen-endpoint.")
          ( "p2p-peer-address", bpo::value< vector<string> >()->composing(),
            "The public endpoint of a peer node to connect to. Use multiple p2p-peer-address options as needed to compose a network.\n"
-           "  Syntax: host:port[:<trx>|<blk>]\n"
-           "  The optional 'trx' and 'blk' indicates to node that only transactions 'trx' or blocks 'blk' should be sent."
+           "  Syntax: host:port[:<trx>|<blk>|<peer>|<all>]\n"
+           "  The optional 'trx' and 'blk' indicates to node that only transactions 'trx' or blocks 'blk' or peers 'peer' should be sent.\n"
+           "  Empty for trx and blk, 'all' for trx and blk and peer.\n"
            "  Examples:\n"
            "    p2p.eos.io:9876\n"
            "    p2p.trx.eos.io:9876:trx\n"
-           "    p2p.blk.eos.io:9876:blk\n")
+           "    p2p.blk.eos.io:9876:blk\n"
+           "    p2p.peer.eos.io:9876:peer\n"
+           "    p2p.eos.io:9876:all\n")
          ( "p2p-max-nodes-per-host", bpo::value<int>()->default_value(def_max_nodes_per_host), "Maximum number of client nodes from any single IP address")
          ( "p2p-accept-transactions", bpo::value<bool>()->default_value(true), "Allow transactions received over p2p network to be evaluated and relayed if valid.")
          ( "p2p-auto-bp-peer", bpo::value< vector<string> >()->composing(),
