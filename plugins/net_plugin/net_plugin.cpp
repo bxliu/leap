@@ -800,6 +800,7 @@ namespace eosio {
       void handle_message( const block_id_type& id, signed_block_ptr msg );
       void handle_message( const packed_transaction& msg ) = delete; // packed_transaction_ptr overload used instead
       void handle_message( packed_transaction_ptr msg );
+      void handle_message( const peer_request_message& msg );
 
       void process_signed_block( const block_id_type& id, signed_block_ptr msg, block_state_ptr bsp );
 
@@ -876,6 +877,12 @@ namespace eosio {
          // continue call to handle_message on connection strand
          peer_dlog( c, "handle sync_request_message" );
          c->handle_message( msg );
+      }
+
+      void operator()( const peer_request_message& msg ) const {
+          // continue call to handle_message on connection strand
+          peer_dlog( c, "handle peer_request_message" );
+          c->handle_message( msg );
       }
    };
 
@@ -3153,6 +3160,10 @@ namespace eosio {
          }
          enqueue_sync_block();
       }
+   }
+
+   void connection::handle_message(const peer_request_message &msg) {
+    //TODO: handle peer request
    }
 
    size_t calc_trx_size( const packed_transaction_ptr& trx ) {
