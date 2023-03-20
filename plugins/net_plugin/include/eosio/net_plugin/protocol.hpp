@@ -136,9 +136,15 @@ namespace eosio {
    };
 
    struct peer_request_message {
-       peer_request_message() : type(0), node_id() {}
-       uint16_t         type = 0;
-       fc::sha256       node_id;
+      peer_request_message() : type(0), node_id() {}
+      uint16_t         type = 0;  // 0 for initial, 1 for update
+      fc::sha256       node_id;
+   };
+
+   struct peer_sync_message {
+      peer_sync_message() : size(0), p2p_addresses() {}
+      unit16_t         size = 0;
+      vector<string>   p2p_addresses;
    };
 
    using net_message = std::variant<handshake_message,
@@ -148,9 +154,10 @@ namespace eosio {
                                     notice_message,
                                     request_message,
                                     sync_request_message,
-                                    signed_block,         // which = 8
-                                    packed_transaction,  // which = 9
-                                    peer_request_message>;
+                                    signed_block,         // which = 7
+                                    packed_transaction,  // which = 8
+                                    peer_request_message,
+                                    peer_sync_message>;
 
 } // namespace eosio
 
@@ -170,6 +177,8 @@ FC_REFLECT( eosio::notice_message, (known_trx)(known_blocks) )
 FC_REFLECT( eosio::request_message, (req_trx)(req_blocks) )
 FC_REFLECT( eosio::sync_request_message, (start_block)(end_block) )
 FC_REFLECT( eosio::peer_request_message, (type)(node_id) )
+FC_REFLECT( eosio::peer_sync_message, (size)(p2p_addresses))
+
 
 
 /**
